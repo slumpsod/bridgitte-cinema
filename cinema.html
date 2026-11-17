@@ -694,7 +694,18 @@ const FIRST_PHOTO = 2;
 let rIdx = -1, rT = 0, cur = 0, fadeT = 0, filmClock = 0, paused = false;
 
 let music = null;
-if (CONFIG.music){ music = new Audio(CONFIG.music); music.loop = true; music.volume = 0.5; }
+if (CONFIG.music){ music = new Audio(CONFIG.music); music.loop = true; music.volume = 0.35; music.preload = 'auto'; }
+/* Phones only allow sound that starts from a tap. On the very first tap we start the music
+   and quickly play+pause each video so the film can later play them with sound. */
+let mediaUnlocked = false;
+function unlockMedia(){
+  if (mediaUnlocked) return; mediaUnlocked = true;
+  if (music && music.paused) music.play().catch(()=>{ mediaUnlocked = false; });
+  CONFIG.photos.forEach((p, i) => { if (!p.video) return;
+    const o = videoFor(i); if (!o.v.paused) return;
+    const pr = o.v.play(); o.v.pause(); if (pr && pr.catch) pr.catch(()=>{}); });
+}
+['click', 'touchend', 'keydown'].forEach(ev => addEventListener(ev, unlockMedia, { capture:true }));
 
 function showItem(k){
   k = clamp(k, 0, reel.length - 1);
@@ -705,16 +716,16 @@ function showItem(k){
   P.renderOrder = 2; O.renderOrder = 1; P.position.z = SCREEN_Z + 0.06; O.position.z = SCREEN_Z + 0.04;
   P.userData = { item:it, ready:false, t0:filmClock };
   P.visible = true;
-  stopVideos(); if (music) music.volume = 0.5;
+  stopVideos(); if (music && it.kind !== 'video' && phase === 'film' && !paused && music.paused) music.play().catch(()=>{});
   const ready = (tex, aspect) => { if (P.userData.item !== it) return; P.material.map = tex; P.material.needsUpdate = true; fitPlane(P, aspect); P.userData.ready = true; };
   if (it.kind === 'leader') ready(leaderTex, 16/9);
   else if (it.kind === 'title') ready(titleTex, 16/9);
   else if (it.kind === 'credits'){ creditsTex.offset.y = 1 - creditsTex.repeat.y; ready(creditsTex, 16/9); }
   else if (it.kind === 'video'){
-    const o = videoFor(it.i); o.v.currentTime = 0; o.v.muted = false; if (music) music.volume = 0.06;
+    const o = videoFor(it.i); o.v.currentTime = 0; o.v.muted = false; if (music) music.pause();   // music rests while a video plays
     const go = () => ready(o.tex, (o.v.videoWidth || 16) / (o.v.videoHeight || 9));
     if (o.v.readyState >= 1) go(); else o.v.addEventListener('loadedmetadata', go, { once:true });
-    if (!paused) o.v.play().catch(()=>{});
+    if (!paused) o.v.play().catch(()=>{ o.v.muted = true; o.v.play().catch(()=>{}); });   // if sound is blocked, still show it
   } else {
     photoTex(it.i, t => { if (t) ready(t, t.userData.aspect); else { it.dur = 0; P.userData.ready = true; } });
     for (const j of [it.i + 1, it.i + 2]) if (j < N && !CONFIG.photos[j].video) photoTex(j);
@@ -729,7 +740,7 @@ function setPaused(p){
   paused = p; $('play').textContent = p ? '▶' : '⏸'; $('pausedTag').classList.toggle('hidden', !p);
   const it = reel[rIdx];
   if (it && it.kind === 'video'){ const o = videoFor(it.i); p ? o.v.pause() : o.v.play().catch(()=>{}); }
-  if (music) p ? music.pause() : music.play().catch(()=>{});
+  if (music){ if (p) music.pause(); else if (!(it && it.kind === 'video')) music.play().catch(()=>{}); }
 }
 function updateFilm(dt){
   const it = reel[rIdx]; if (!it) return;
@@ -761,23 +772,38 @@ const KIOSK_POS = V(-2.6, 1.75, KIOSK.z + 5.0), KIOSK_LOOK = V(KIOSK.x, 1.8, KIO
 let walkPos, walkLook, walkCum, walkTotal;
 function buildWalk(){
   const sz = seatZ(), fy = floorY(sz);
+  const D = 4.1, EY = 1.7, PY = 2.65;                                  // how far to stand from each poster
+  const BOX_L = V(-6.4, 3.0, FACADE_Z + 0.6), BOX_R = V(6.4, 3.0, FACADE_Z + 0.6);
   const pts = [
     [KIOSK_POS, KIOSK_LOOK, 0],
-    [V(0, 1.7, FACADE_Z + 5.5), V(0, 3.2, FACADE_Z - 4), 3.0],          // turn to the doors
-    [V(0, 1.7, FACADE_Z - 1.6), V(0, 2.4, -8), 3.2],                    // through the doors
-    [V(0.3, 1.7, -0.6), V(-7, 2.8, -1.6), 2.6],                          // posters on the left
-    [V(-0.3, 1.7, -4.2), V(7, 2.8, -5.2), 2.8],                          // posters on the right
-    [V(0, 1.7, -8.4), V(0, 3.0, -20), 2.6],                             // into Screen A
+    [V(-2.4, 1.75, FACADE_Z + 5.2), BOX_L, 2.4],                          // the poster box on the left
+    [V(-5.4, 1.75, FACADE_Z + 4.8), BOX_L, 2.0],
+    [V(-5.0, 1.75, FACADE_Z + 4.7), BOX_L, 1.5],
+    [V(5.0, 1.75, FACADE_Z + 4.7), BOX_R, 3.6],                           // ...and on the right
+    [V(5.4, 1.75, FACADE_Z + 4.8), BOX_R, 1.5],
+    [V(0, 1.7, FACADE_Z + 2.6), V(0, 2.6, -8), 2.6],                      // turn to the doors
+    [V(0, 1.7, FACADE_Z - 1.2), V(-3, 2.6, -2), 1.8],                     // through the doors
+  ];
+  // NOW SHOWING: stop in front of every poster, left wall going in, right wall coming back
+  const Ls = POSTER_SPOTS.filter(q => q.x < 0).sort((a, b) => b.z - a.z);
+  const Rs = POSTER_SPOTS.filter(q => q.x > 0).sort((a, b) => a.z - b.z);
+  Ls.forEach(q => { pts.push([V(q.x + D, EY, q.z + 0.3), V(q.x, PY, q.z), 1.4]); pts.push([V(q.x + D, EY, q.z - 0.3), V(q.x, PY, q.z), 1.7]); });
+  pts.push([V(0, EY, -8.0), V(0, 2.6, -14), 1.8]);
+  Rs.forEach(q => { pts.push([V(q.x - D, EY, q.z - 0.3), V(q.x, PY, q.z), 1.4]); pts.push([V(q.x - D, EY, q.z + 0.3), V(q.x, PY, q.z), 1.7]); });
+  pts.push(
+    [V(0.8, 1.7, 0.4), V(0, 2.6, -10), 2.0],                             // turn toward Screen A
+    [V(0, 1.7, -8.4), V(0, 3.0, -20), 3.0],                             // into Screen A
     [V(0, 1.7 + floorY(-14), -14), V(0, SCREEN_Y, SCREEN_Z), 3.2],       // the big screen
     [V(0, 1.7 + fy, sz + 1.0), V(0, SCREEN_Y - 1, SCREEN_Z), 4.4],       // down the aisle
     [V(SEAT_X, 1.12 + fy, sz + 0.05), V(0, SCREEN_Y, SCREEN_Z), 2.6],    // sit down
-  ];
+  );
   walkPos = new THREE.CatmullRomCurve3(pts.map(p=>p[0]), false, 'centripetal');
   walkLook = new THREE.CatmullRomCurve3(pts.map(p=>p[1]), false, 'centripetal');
   walkCum = [0]; pts.slice(1).forEach(p => walkCum.push(walkCum[walkCum.length-1] + p[2])); walkTotal = walkCum[walkCum.length-1];
 }
 function walkAt(t, outPos, outLook){
-  const T = (0.5 - 0.5*Math.cos(Math.PI*clamp(t/walkTotal,0,1))) * walkTotal;
+  const r = 1.4, tt = clamp(t, 0, walkTotal + r);
+  const T = tt < r ? tt*tt/(2*r) : tt > walkTotal ? walkTotal - (walkTotal + r - tt)**2/(2*r) : tt - r/2;
   let k = 0; while (k < walkCum.length - 2 && T > walkCum[k+1]) k++;
   const u = (k + clamp((T - walkCum[k])/(walkCum[k+1] - walkCum[k]), 0, 1)) / (walkCum.length - 1);
   walkPos.getPoint(u, outPos); walkLook.getPoint(u, outLook);
@@ -815,7 +841,7 @@ function sitDown(startAt){
 let pendingStart = 0;
 function startFilm(){
   setPhase('film'); setPaused(false); confettiOn = false;
-  if (music){ music.currentTime = 0; music.play().catch(()=>{}); }
+  if (music){ music.volume = 0.5; music.currentTime = 0; music.play().catch(()=>{}); }
   showItem(pendingStart);
 }
 function endFilm(){
@@ -1072,7 +1098,7 @@ function step(dt){
     camPos.lerpVectors(STREET_POS, KIOSK_POS, t); camLook.lerpVectors(STREET_LOOK, KIOSK_LOOK, smooth(t));
     if (phaseT >= 6.8) giveTicket(); }
   else if (phase === 'ticket'){ camPos.copy(KIOSK_POS); camLook.copy(KIOSK_LOOK); }
-  else if (phase === 'walk2'){ walkAt(phaseT, camPos, camLook); if (phaseT >= walkTotal + 0.3) sitDown(pendingStart); }
+  else if (phase === 'walk2'){ walkAt(phaseT, camPos, camLook); if (phaseT >= walkTotal + 1.6) sitDown(pendingStart); }
   else seatPose(camPos, camLook);
 
   if (phase === 'dim'){ seatPose(tmpPos, tmpLook); camPos.copy(tmpPos); if (phaseT > 3.4) startFilm(); }

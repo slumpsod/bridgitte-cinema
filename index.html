@@ -526,8 +526,8 @@ function focus(i) {
   if (i >= N) { unfocus(); targetZ = STOP_Z; return; }
   focused = i;
   exhibits.forEach(e => { if (e.video) e.video.muted = true; });
-  if (exhibits[i].video) { const v = exhibits[i].video; v.currentTime = 0; v.muted = false; v.play().catch(() => {}); if (audio) audio.volume = 0.12; }
-  else if (audio) audio.volume = 0.6;
+  if (exhibits[i].video) { const v = exhibits[i].video; v.currentTime = 0; v.muted = false; v.play().catch(() => {}); if (audio) audio.pause(); }   // phones can't lower volume, so the music rests
+  else if (audio && started && audio.paused) audio.play().catch(() => {});
   $('cap-label').textContent = `Memory ${i + 1} of ${N}`;
   $('cap-text').textContent = exhibits[i].caption;
   $('caption').classList.remove('hidden');
@@ -541,7 +541,7 @@ function unfocus() {
   if (focused < 0) return;
   focused = -1;
   exhibits.forEach(e => { if (e.video) e.video.muted = true; });
-  if (audio) audio.volume = 0.6;
+  if (audio && started && audio.paused) audio.play().catch(() => {});
   $('caption').classList.add('hidden');
   $('hud').classList.remove('hidden');
 }
