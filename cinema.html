@@ -643,7 +643,7 @@ const creditsTex = (() => {
     add(NAME + ', on guitar', 'italic 400 46px "Playfair Display", serif', '#f6e7cf', 120); }
   else lines[lines.length-1].gap = 110;
   add('MADE WITH LOVE BY', '700 26px Inter, sans-serif', '#e0b264', 52);
-  add(CONFIG.from, '700 66px Caveat, cursive', '#fff3dc', 120);
+  { const by = CONFIG.from.replace(/^love,?\s*/i, '') || CONFIG.from; add(by.charAt(0).toUpperCase() + by.slice(1), '700 66px Caveat, cursive', '#fff3dc', 120); }
   add('No birthdays were harmed in the making of this film.', '400 24px Inter, sans-serif', '#9c8f84', 40);
   let H = VIEW; lines.forEach(l => H += l.gap); H += VIEW;
   const s = Math.min(1, (Math.min(maxTex, 8192) - 8)/H);

@@ -1,12 +1,12 @@
 // Shared story data for Bridgitte's birthday builds. Edit captions/text here and every scene changes.
 export const CONFIG = {
   name: "Bridgitte",                 // her name
-  from: "Love, me",                  // how you sign off
+  from: "Love, your family",         // how you sign off
   introLine: "A little walk down memory lane",
   finalMessage:
-`Every photo in this hallway is a moment I'm grateful for.
-Thank you for being the best sister anyone could ask for.
-Here's to another year of making memories together.`,
+`Every photo here is a moment we're so grateful for.
+Thank you for filling our lives with so much joy and laughter.
+We love you so much!`,
   music: "birthday-waltz.mp3",       // original waltz made for this (swap in any .mp3 placed next to this file)
   // src: path to an image, or video: path to an .mp4 (plays muted; sound on when tapped). caption: your note.
   photos: [
