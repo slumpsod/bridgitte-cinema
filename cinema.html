@@ -695,12 +695,12 @@ let rIdx = -1, rT = 0, cur = 0, fadeT = 0, filmClock = 0, paused = false;
 
 let music = null;
 if (CONFIG.music){ music = new Audio(CONFIG.music); music.loop = true; music.volume = 0.35; music.preload = 'auto'; }
-/* Phones only allow sound that starts from a tap. On the very first tap we start the music
-   and quickly play+pause each video so the film can later play them with sound. */
+/* Phones only allow sound that starts from a tap. On the very first tap we quickly play+pause
+   the music and each video, so the film can later play them with sound. */
 let mediaUnlocked = false;
 function unlockMedia(){
   if (mediaUnlocked) return; mediaUnlocked = true;
-  if (music && music.paused) music.play().catch(()=>{ mediaUnlocked = false; });
+  if (music && music.paused && phase !== 'film'){ const pr = music.play(); music.pause(); if (pr && pr.catch) pr.catch(()=>{}); }   // unlock only: music waits for the film
   CONFIG.photos.forEach((p, i) => { if (!p.video) return;
     const o = videoFor(i); if (!o.v.paused) return;
     const pr = o.v.play(); o.v.pause(); if (pr && pr.catch) pr.catch(()=>{}); });
@@ -1085,7 +1085,7 @@ const camPos = V(0,0,0), camLook = V(0,0,0), tmpPos = V(0,0,0), tmpLook = V(0,0,
 const params = new URLSearchParams(location.search);
 if (params.get('scene')) sitDown(FIRST_PHOTO + clamp((parseInt(params.get('scene'),10) || 1) - 1, 0, N - 1));
 else if (params.get('seat')) sitDown(0);
-if (params.get('debug')) window.__DBG = { P, keys, startRoam, get act(){ return curAct; }, get hasTicket(){ return hasTicket; }, THREE, scene, camera, get phase(){ return phase; }, showItem, reel, step:(n=1, dt=1/30)=>{ for (let i=0;i<n;i++) step(dt); }, go:(p)=>{ if (p==='walk1') $('enter').click(); else if (p==='walk2') goInside(); } };
+if (params.get('debug')) window.__DBG = { get music(){ return music; }, P, keys, startRoam, get act(){ return curAct; }, get hasTicket(){ return hasTicket; }, THREE, scene, camera, get phase(){ return phase; }, showItem, reel, step:(n=1, dt=1/30)=>{ for (let i=0;i<n;i++) step(dt); }, go:(p)=>{ if (p==='walk1') $('enter').click(); else if (p==='walk2') goInside(); } };
 
 let time = 0, last = performance.now();
 function step(dt){
