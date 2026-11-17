@@ -7,7 +7,7 @@ export const CONFIG = {
 `Every photo in this hallway is a moment I'm grateful for.
 Thank you for being the best sister anyone could ask for.
 Here's to another year of making memories together.`,
-  music: "",                         // optional: e.g. "song.mp3" placed next to this file
+  music: "birthday-waltz.mp3",       // original waltz made for this (swap in any .mp3 placed next to this file)
   // src: path to an image, or video: path to an .mp4 (plays muted; sound on when tapped). caption: your note.
   photos: [
     { src: "photos/01.jpg", caption: "Peak road-trip energy. The mustache stays. 🥸" },
