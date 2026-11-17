@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Happy Birthday 🎂</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,500;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  :root { --cream:#f6e7cf; --gold:#e2b765; --ink:#140a0d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; background:var(--ink); overflow:hidden; font-family:Inter, system-ui, sans-serif; color:var(--cream); }
+  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; transition:opacity 1.2s ease, visibility 1.2s; z-index:10; }
+  .hidden { opacity:0 !important; visibility:hidden; pointer-events:none; }
+
+  #intro { background: radial-gradient(ellipse at center, rgba(40,16,22,.55) 0%, rgba(14,6,9,.94) 70%); backdrop-filter: blur(3px); }
+  #intro .small { letter-spacing:.35em; text-transform:uppercase; font-size:12px; opacity:.7; }
+  #intro h1 { font-family:'Playfair Display', serif; font-style:italic; font-weight:400; font-size:clamp(34px, 7vw, 68px); margin:.35em 0 .1em; line-height:1.1; }
+  #intro .for { font-family:Caveat, cursive; font-size:clamp(30px, 6vw, 48px); color:var(--gold); margin-bottom:1.4em; }
+  .btn { font:500 15px Inter, sans-serif; letter-spacing:.12em; text-transform:uppercase; color:var(--cream); background:rgba(226,183,101,.12); border:1px solid rgba(226,183,101,.7); padding:14px 30px; border-radius:999px; cursor:pointer; transition:background .3s, transform .2s; }
+  .btn:hover { background:rgba(226,183,101,.28); transform:translateY(-1px); }
+  #intro .tip { margin-top:22px; font-size:13px; opacity:.55; max-width:340px; line-height:1.5; }
+
+  #hud { position:fixed; left:0; right:0; bottom:calc(18px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; align-items:center; gap:10px; z-index:5; pointer-events:none; transition:opacity .6s; }
+  #hint { font-size:13px; opacity:.8; background:rgba(20,10,12,.55); padding:8px 16px; border-radius:999px; backdrop-filter:blur(6px); transition:opacity 1s; }
+  #bar { width:180px; height:3px; background:rgba(246,231,207,.18); border-radius:3px; overflow:hidden; }
+  #bar i { display:block; height:100%; width:0%; background:linear-gradient(90deg, #e2b765, #f6d79a); }
+  #count { font-size:11px; letter-spacing:.25em; text-transform:uppercase; opacity:.6; }
+
+  #caption { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom)); transform:translate(-50%, 0); width:min(640px, calc(100% - 24px)); background:rgba(22,10,14,.78); backdrop-filter:blur(10px); border:1px solid rgba(226,183,101,.25); border-radius:20px; padding:16px 18px 14px; z-index:6; transition:opacity .5s, transform .5s; text-align:center; }
+  #caption.hidden { transform:translate(-50%, 20px); }
+  #cap-label { font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  #cap-text { font-family:Caveat, cursive; font-size:clamp(24px, 5.2vw, 32px); line-height:1.2; margin:6px 0 10px; }
+  #cap-nav { display:flex; justify-content:space-between; align-items:center; }
+  #cap-nav button { background:none; border:1px solid rgba(246,231,207,.25); color:var(--cream); width:44px; height:44px; border-radius:50%; font-size:20px; cursor:pointer; }
+  #cap-nav button:hover { border-color:var(--gold); }
+  #cap-nav span { font-size:12px; opacity:.5; }
+
+  #finale .card { max-width:520px; background:rgba(22,10,14,.72); backdrop-filter:blur(10px); border:1px solid rgba(226,183,101,.3); border-radius:24px; padding:32px 28px; }
+  #finale h2 { font-family:'Playfair Display', serif; font-style:italic; font-weight:400; font-size:clamp(30px, 6vw, 46px); margin:0 0 .4em; color:var(--gold); }
+  #finale p { font-family:Caveat, cursive; font-size:clamp(23px, 4.6vw, 29px); line-height:1.3; margin:0 0 .6em; white-space:pre-line; }
+  #finale .from { font-family:Caveat, cursive; font-size:26px; color:var(--gold); margin-bottom:1.2em; }
+  #finale .row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+
+  #mute { position:fixed; top:calc(14px + env(safe-area-inset-top)); right:14px; z-index:7; width:42px; height:42px; border-radius:50%; border:1px solid rgba(246,231,207,.3); background:rgba(20,10,12,.5); color:var(--cream); font-size:18px; cursor:pointer; }
+  /* no captions or notes at the bottom: keep only the ‹ › buttons */
+  #hint, #cap-label, #cap-text, #cap-nav span { display:none !important; }
+  #caption { width:auto; padding:6px 10px; background:rgba(22,10,14,.55); }
+  #cap-nav { gap:36px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="intro" class="overlay">
+  <div class="small" id="intro-small">A little walk down memory lane</div>
+  <h1>Happy Birthday</h1>
+  <div class="for" id="intro-for">for you</div>
+  <button class="btn" id="enter">Step inside</button>
+  <div class="tip">Scroll, swipe up or use the arrow keys to walk.<br>Tap any photo to look closer.</div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="hint">Swipe up or scroll to walk · tap a photo</div>
+  <div id="bar"><i></i></div>
+  <div id="count">0 / 0</div>
+</div>
+
+<div id="caption" class="hidden">
+  <div id="cap-label">Memory 1 of 24</div>
+  <div id="cap-text"></div>
+  <div id="cap-nav">
+    <button id="prev" aria-label="Previous">‹</button>
+    <span>tap anywhere to step back</span>
+    <button id="next" aria-label="Next">›</button>
+  </div>
+</div>
+
+<div id="finale" class="overlay hidden">
+  <div class="card">
+    <h2 id="fin-title">Happy Birthday!</h2>
+    <p id="fin-msg"></p>
+    <div class="from" id="fin-from"></div>
+    <div class="row">
+      <button class="btn" id="again">Walk it again</button>
+      <button class="btn" id="stay">Stay a while</button>
+    </div>
+  </div>
+</div>
+
+<button id="mute" class="hidden" aria-label="Toggle music">♪</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ============================================================
+   ✏️  To edit photos, captions or messages, open core.js
+   ============================================================ */
+// Photos, captions, name and messages live in core.js (shared with cinema.html).
+import { CONFIG } from './core.js';
+/* ============================================================ */
+
+// ---------- layout ----------
+const N = CONFIG.photos.length;
+const HALL_W = 5.2, HALL_H = 3.8, EYE = 1.6, PHOTO_Y = 2.0;
+const FIRST_Z = -3, SPACING = 3.0;
+const LAST_Z = FIRST_Z - (N - 1) * SPACING;
+const END_Z = LAST_Z - 7;
+const START_Z = 3.5, STOP_Z = END_Z + 3.9;
+const HALL_FRONT = 6.5;
+const HALL_LEN = HALL_FRONT - END_Z, HALL_MID = (HALL_FRONT + END_Z) / 2;
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
+
+$('intro-small').textContent = CONFIG.introLine;
+$('intro-for').textContent = 'for ' + CONFIG.name;
+$('fin-title').textContent = `Happy Birthday, ${CONFIG.name}!`;
+$('fin-msg').textContent = CONFIG.finalMessage;
+$('fin-from').textContent = CONFIG.from;
+
+// wait (briefly) for fonts so canvas text renders in the right typeface
+await Promise.race([
+  Promise.all([
+    document.fonts.load('italic 400 80px "Playfair Display"'),
+    document.fonts.load('700 80px "Playfair Display"'),
+    document.fonts.load('700 60px Caveat'),
+    document.fonts.load('500 60px Caveat'),
+  ]),
+  new Promise(r => setTimeout(r, 2500)),
+]);
+
+// ---------- renderer / scene ----------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x140a0d);
+scene.fog = new THREE.Fog(0x140a0d, 7, 26);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 80);
+scene.add(camera);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  return t;
+}
+function wrapText(g, text, maxW) {
+  const words = text.split(/\s+/), lines = []; let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (g.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// ---------- lights ----------
+scene.add(new THREE.HemisphereLight(0xffe8d0, 0x2a1418, 1.0));
+const camLight = new THREE.PointLight(0xffd6a8, 16, 10, 2);
+camLight.position.set(0, 0.4, 0.3);
+camera.add(camLight);
+const endLight = new THREE.PointLight(0xffc98a, 14, 12, 2);
+endLight.position.set(0, 3.0, END_Z + 2.2);
+scene.add(endLight);
+
+// ---------- textures ----------
+const floorTex = canvasTex(512, 1024, (g, w, h) => {
+  const pw = 64;
+  for (let x = 0; x < w; x += pw) {
+    let y = 0;
+    while (y < h) {
+      const len = 180 + Math.random() * 300;
+      const l = 22 + Math.random() * 10;
+      g.fillStyle = `hsl(22, 38%, ${l}%)`;
+      g.fillRect(x, y, pw, len);
+      g.strokeStyle = 'rgba(0,0,0,.08)';
+      for (let k = 0; k < 6; k++) {
+        g.beginPath(); const gx = x + 6 + Math.random() * (pw - 12);
+        g.moveTo(gx, y); g.bezierCurveTo(gx + 6, y + len * .3, gx - 6, y + len * .6, gx, y + len); g.stroke();
+      }
+      g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, y, pw, 2);
+      y += len;
+    }
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(x, 0, 2, h);
+  }
+});
+floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+floorTex.repeat.set(HALL_W / 4, HALL_LEN / 4);
+
+const plasterTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 4000; i++) {
+    g.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+  }
+});
+plasterTex.wrapS = plasterTex.wrapT = THREE.RepeatWrapping;
+plasterTex.repeat.set(HALL_LEN / 2, HALL_H / 2);
+
+const glowTex = canvasTex(256, 256, (g, w, h) => {
+  const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  gr.addColorStop(0, 'rgba(255,214,160,0.55)');
+  gr.addColorStop(0.45, 'rgba(255,190,130,0.18)');
+  gr.addColorStop(1, 'rgba(255,180,120,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+const dotTex = canvasTex(64, 64, (g, w, h) => {
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+
+// ---------- hallway ----------
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x8a4656, roughness: 0.9, map: plasterTex, envMapIntensity: 0.15 });
+const lowerMat = new THREE.MeshStandardMaterial({ color: 0x47202b, roughness: 0.7, envMapIntensity: 0.2 });
+const goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 0.85, roughness: 0.3 });
+const darkWood = new THREE.MeshStandardMaterial({ color: 0x2a140f, roughness: 0.6 });
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_LEN),
+  new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.45, envMapIntensity: 0.5 }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, HALL_MID); scene.add(floor);
+
+// runner rug down the middle
+const rugTex = canvasTex(256, 1024, (g, w, h) => {
+  g.fillStyle = '#5c1d2a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#c9a25a'; g.lineWidth = 6; g.strokeRect(14, -10, w - 28, h + 20);
+  g.lineWidth = 2; g.strokeRect(26, -10, w - 52, h + 20);
+  g.fillStyle = 'rgba(201,162,90,.35)';
+  for (let y = 40; y < h; y += 128) { g.save(); g.translate(w / 2, y); g.rotate(Math.PI / 4); g.fillRect(-18, -18, 36, 36); g.restore(); }
+});
+rugTex.wrapT = THREE.RepeatWrapping; rugTex.repeat.set(1, HALL_LEN / 3);
+const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, HALL_LEN - 1.5), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
+rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.005, HALL_MID); scene.add(rug);
+
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_LEN), new THREE.MeshStandardMaterial({ color: 0x2a161b, roughness: 1 }));
+ceiling.rotation.x = Math.PI / 2; ceiling.position.set(0, HALL_H, HALL_MID); scene.add(ceiling);
+
+for (const side of [-1, 1]) {
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_LEN, HALL_H), wallMat);
+  wall.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  wall.position.set(side * HALL_W / 2, HALL_H / 2, HALL_MID); scene.add(wall);
+  const lower = new THREE.Mesh(new THREE.PlaneGeometry(HALL_LEN, 1.0), lowerMat);
+  lower.rotation.y = wall.rotation.y;
+  lower.position.set(side * (HALL_W / 2 - 0.005), 0.5, HALL_MID); scene.add(lower);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, HALL_LEN), goldMat);
+  rail.position.set(side * (HALL_W / 2 - 0.025), 1.0, HALL_MID); scene.add(rail);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, HALL_LEN), darkWood);
+  base.position.set(side * (HALL_W / 2 - 0.02), 0.08, HALL_MID); scene.add(base);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, HALL_LEN), darkWood);
+  crown.position.set(side * (HALL_W / 2 - 0.04), HALL_H - 0.05, HALL_MID); scene.add(crown);
+}
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_H), wallMat);
+backWall.rotation.y = Math.PI; backWall.position.set(0, HALL_H / 2, HALL_FRONT); scene.add(backWall);
+
+// ceiling lamps
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xffdcaa, toneMapped: false });
+const lampGeo = new THREE.CylinderGeometry(0.16, 0.2, 0.05, 24);
+for (let z = HALL_FRONT - 2; z > END_Z + 1; z -= SPACING) {
+  const l = new THREE.Mesh(lampGeo, lampMat); l.position.set(0, HALL_H - 0.03, z); scene.add(l);
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4),
+    new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: .8 }));
+  halo.rotation.x = Math.PI / 2; halo.position.set(0, HALL_H - 0.01, z); scene.add(halo);
+}
+
+// welcome banner
+const bannerTex = canvasTex(1400, 260, (g, w, h) => {
+  g.fillStyle = '#24110f'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#c9a25a'; g.lineWidth = 6; g.strokeRect(14, 14, w - 28, h - 28);
+  g.fillStyle = '#e2b765'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = 'italic 400 92px "Playfair Display", serif';
+  g.fillText(`${CONFIG.name}'s Memory Lane`, w / 2, h / 2 + 4);
+});
+const banner = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2 * 260 / 1400),
+  new THREE.MeshStandardMaterial({ map: bannerTex, roughness: .6, emissive: 0xffffff, emissiveMap: bannerTex, emissiveIntensity: .35 }));
+banner.position.set(0, 3.05, FIRST_Z + 1.6); scene.add(banner);
+for (const sx of [-1.3, 1.3]) {
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, HALL_H - 3.3, 6), goldMat);
+  rod.position.set(sx, (HALL_H + 3.3) / 2, FIRST_Z + 1.6); scene.add(rod);
+}
+
+// ---------- exhibits ----------
+const frameMat = new THREE.MeshStandardMaterial({ color: 0xc89b4a, metalness: 0.9, roughness: 0.28 });
+const matMat = new THREE.MeshStandardMaterial({ color: 0xf3ebde, roughness: 0.95, envMapIntensity: .3 });
+const exhibits = [], clickables = [];
+const loader = new THREE.TextureLoader();
+
+function placeholderTex(i) {
+  const aspects = [4 / 3, 3 / 4, 1, 3 / 2, 4 / 5, 16 / 9];
+  const a = aspects[i % aspects.length];
+  const W = 900, H = Math.round(W / a);
+  const hue = (i * 41 + 10) % 360;
+  const tex = canvasTex(W, H, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, `hsl(${hue},70%,78%)`); gr.addColorStop(1, `hsl(${(hue + 40) % 360},55%,48%)`);
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,250,230,.85)'; g.beginPath(); g.arc(w * .72, h * .3, Math.min(w, h) * .11, 0, 7); g.fill();
+    g.fillStyle = `hsla(${(hue + 160) % 360},35%,30%,.55)`;
+    g.beginPath(); g.moveTo(0, h * .75); g.quadraticCurveTo(w * .3, h * .5, w * .6, h * .72); g.quadraticCurveTo(w * .8, h * .82, w, h * .66); g.lineTo(w, h); g.lineTo(0, h); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.95)'; g.textAlign = 'center';
+    g.font = `italic 400 ${Math.round(w * .09)}px "Playfair Display", serif`;
+    g.fillText(`Photo ${i + 1}`, w / 2, h * .52);
+    g.font = `500 ${Math.round(w * .04)}px Inter, sans-serif`; g.globalAlpha = .75;
+    g.fillText('your picture goes here', w / 2, h * .52 + w * .07);
+  });
+  return { tex, aspect: a };
+}
+
+function plaqueTex(i, caption) {
+  return canvasTex(700, 300, (g, w, h) => {
+    g.fillStyle = '#f1e7d4'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#b48a45'; g.lineWidth = 5; g.strokeRect(10, 10, w - 20, h - 20);
+    g.fillStyle = '#8a6430'; g.textAlign = 'center';
+    g.font = '500 26px Inter, sans-serif';
+    g.fillText(`N° ${String(i + 1).padStart(2, '0')}`, w / 2, 58);
+    g.fillStyle = '#3a2218'; g.font = '700 44px Caveat, cursive';
+    let lines = wrapText(g, caption, w - 80);
+    if (lines.length > 4) { lines = lines.slice(0, 4); lines[3] += '…'; }
+    const lh = 46, y0 = 58 + (h - 58) / 2 - (lines.length - 1) * lh / 2 + 14;
+    lines.forEach((l, k) => g.fillText(l, w / 2, y0 + k * lh));
+  });
+}
+
+function makeExhibit(i, data) {
+  const side = i % 2 === 0 ? -1 : 1;
+  const grp = new THREE.Group();
+  grp.position.set(side * HALL_W / 2, PHOTO_Y, FIRST_Z - i * SPACING);
+  grp.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  scene.add(grp);
+
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  glow.position.z = 0.004; grp.add(glow);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.08), frameMat); frame.position.z = 0.04; grp.add(frame);
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matMat); mat.position.z = 0.0805; grp.add(mat);
+  const photoMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const photo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), photoMat); photo.position.z = 0.083; grp.add(photo);
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62 * 300 / 700),
+    new THREE.MeshBasicMaterial({ map: plaqueTex(i, data.caption || ''), toneMapped: false }));
+  plaque.position.z = 0.012; plaque.visible = false; grp.add(plaque);   // plaques hidden (set true to bring captions back)
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 12), goldMat);
+  lamp.rotation.z = Math.PI / 2; grp.add(lamp);
+  const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 8), goldMat);
+  lampArm.rotation.x = Math.PI / 2; grp.add(lampArm);
+  const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.012, 0.02), lampMat); grp.add(bulb);
+
+  const ex = { i, side, grp, photo, w: 1, h: 1, z: grp.position.z, caption: data.caption || '' };
+  [photo, mat, frame].forEach(m => { m.userData.exhibit = i; clickables.push(m); });
+
+  ex.fit = (aspect) => {
+    const maxW = 1.9, maxH = 1.55;
+    let w, h;
+    if (aspect > maxW / maxH) { w = maxW; h = w / aspect; } else { h = maxH; w = h * aspect; }
+    const pad = 0.12, fr = 0.09;
+    photo.scale.set(w, h, 1);
+    mat.scale.set(w + pad * 2, h + pad * 2, 1);
+    const fw = w + pad * 2 + fr * 2, fh = h + pad * 2 + fr * 2;
+    frame.scale.set(fw, fh, 1);
+    glow.scale.set(fw * 2.1, fh * 1.9, 1); glow.position.y = 0.12;
+    plaque.position.set(0, -fh / 2 - 0.2, 0.012);
+    const ly = fh / 2 + 0.14;
+    lamp.position.set(0, ly, 0.2); lampArm.position.set(0, ly, 0.1); bulb.position.set(0, ly - 0.03, 0.2);
+    ex.w = fw; ex.h = fh;
+  };
+
+  const usePlaceholder = () => {
+    const p = placeholderTex(i);
+    photoMat.map = p.tex; photoMat.needsUpdate = true; ex.fit(p.aspect);
+  };
+  if (data.video) {
+    const v = document.createElement('video');
+    v.src = data.video; v.loop = true; v.muted = true; v.playsInline = true; v.crossOrigin = 'anonymous';
+    v.setAttribute('playsinline', ''); v.preload = 'auto';
+    const vt = new THREE.VideoTexture(v); vt.colorSpace = THREE.SRGBColorSpace;
+    photoMat.map = vt; photoMat.needsUpdate = true;
+    ex.fit(16 / 9); ex.video = v;
+    v.addEventListener('loadedmetadata', () => ex.fit(v.videoWidth / v.videoHeight));
+    v.play().catch(() => {});
+  } else if (data.src) {
+    ex.fit(4 / 3);
+    loader.load(data.src, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+      photoMat.map = tex; photoMat.needsUpdate = true;
+      ex.fit(tex.image.width / tex.image.height);
+    }, undefined, usePlaceholder);
+  } else usePlaceholder();
+  exhibits.push(ex);
+}
+CONFIG.photos.forEach((p, i) => makeExhibit(i, p));
+
+// ---------- end wall ----------
+const endWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_H), wallMat);
+endWall.position.set(0, HALL_H / 2, END_Z); scene.add(endWall);
+const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(6, 4),
+  new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.35 }));
+endGlow.position.set(0, 2.2, END_Z + 0.01); scene.add(endGlow);
+const endTex = canvasTex(2048, 1024, (g, w, h) => {
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(255,190,110,.8)'; g.shadowBlur = 40;
+  const gr = g.createLinearGradient(0, 200, 0, 480);
+  gr.addColorStop(0, '#fbe3a6'); gr.addColorStop(1, '#d9a24c');
+  g.font = 'italic 500 230px "Playfair Display", serif';
+  g.lineWidth = 14; g.strokeStyle = 'rgba(50,12,20,.75)'; g.strokeText('Happy Birthday', w / 2, 340);
+  g.fillStyle = gr; g.fillText('Happy Birthday', w / 2, 340);
+  g.font = '700 300px Caveat, cursive';
+  g.strokeText(CONFIG.name, w / 2, 660);
+  g.fillStyle = '#fff3df'; g.fillText(CONFIG.name, w / 2, 660);
+  g.shadowBlur = 0; g.fillStyle = '#e2b765';
+  const heart = (x, y, s) => { g.beginPath(); g.moveTo(x, y + s * .3); g.bezierCurveTo(x, y, x - s * .5, y, x - s * .5, y + s * .3); g.bezierCurveTo(x - s * .5, y + s * .6, x, y + s * .8, x, y + s); g.bezierCurveTo(x, y + s * .8, x + s * .5, y + s * .6, x + s * .5, y + s * .3); g.bezierCurveTo(x + s * .5, y, x, y, x, y + s * .3); g.fill(); };
+  heart(w / 2, 860, 70); heart(w / 2 - 160, 880, 40); heart(w / 2 + 160, 880, 40);
+});
+const endText = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.3),
+  new THREE.MeshBasicMaterial({ map: endTex, transparent: true, toneMapped: false, depthWrite: false }));
+endText.position.set(0, 2.1, END_Z + 0.03); scene.add(endText);
+
+// balloons
+const balloons = [];
+const balloonColors = [0xf4a7b9, 0xffd27f, 0xa8d8ea, 0xc3a6e8, 0xf7c59f, 0xffffff, 0xe86f8a, 0xb5e8c8];
+const balloonGeo = new THREE.SphereGeometry(0.22, 32, 24);
+for (let k = 0; k < 10; k++) {
+  const g = new THREE.Group();
+  const left = k % 2 === 0;
+  const x = (left ? -1 : 1) * (1.55 + Math.random() * 0.75);
+  g.position.set(x, 2.4 + Math.random() * 0.9, END_Z + 0.4 + Math.random() * 1.6);
+  const b = new THREE.Mesh(balloonGeo, new THREE.MeshStandardMaterial({ color: balloonColors[k % balloonColors.length], roughness: 0.25, metalness: 0.05, envMapIntensity: 1.2 }));
+  b.scale.set(1, 1.18, 1); g.add(b);
+  const knot = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.05, 8), b.material); knot.position.y = -0.27; knot.rotation.x = Math.PI; g.add(knot);
+  const str = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -0.29, 0), new THREE.Vector3(0.04, -0.8, 0.02), new THREE.Vector3(-0.02, -1.5, 0)]),
+    new THREE.LineBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: .6 }));
+  g.add(str);
+  g.userData = { baseY: g.position.y, phase: Math.random() * 6.28 };
+  scene.add(g); balloons.push(g);
+}
+
+// floating dust motes
+const DUST = 600;
+const dustGeo = new THREE.BufferGeometry();
+const dustBase = new Float32Array(DUST * 3), dustPos = new Float32Array(DUST * 3), dustPhase = new Float32Array(DUST);
+for (let k = 0; k < DUST; k++) {
+  dustBase[k * 3] = (Math.random() - .5) * (HALL_W - 0.4);
+  dustBase[k * 3 + 1] = 0.2 + Math.random() * (HALL_H - 0.4);
+  dustBase[k * 3 + 2] = END_Z + Math.random() * HALL_LEN;
+  dustPhase[k] = Math.random() * 6.28;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.035, map: dotTex, color: 0xffdcae, transparent: true, opacity: .7, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+dust.frustumCulled = false; scene.add(dust);
+
+// confetti
+const CONF = 450;
+const confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.045, 0.075),
+  new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }), CONF);
+confetti.frustumCulled = false; scene.add(confetti);
+const confState = [];
+const confColors = [0xf4a7b9, 0xffd27f, 0xa8d8ea, 0xc3a6e8, 0xe2b765, 0xffffff, 0xe86f8a].map(c => new THREE.Color(c));
+const dummy = new THREE.Object3D();
+for (let k = 0; k < CONF; k++) {
+  confState.push({ p: new THREE.Vector3(0, -10, 0), v: 0, r: new THREE.Euler(), rv: new THREE.Vector3(), sway: Math.random() * 6.28, alive: false });
+  confetti.setColorAt(k, confColors[k % confColors.length]);
+  dummy.position.set(0, -10, 0); dummy.scale.setScalar(0); dummy.updateMatrix(); confetti.setMatrixAt(k, dummy.matrix);
+}
+function spawnConf(s, initial) {
+  s.p.set((Math.random() - .5) * (HALL_W - 0.4), initial ? HALL_H + Math.random() * 3 : HALL_H - 0.05, END_Z + 0.3 + Math.random() * (STOP_Z - END_Z + 1));
+  s.v = 0.5 + Math.random() * 0.7;
+  s.r.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+  s.rv.set((Math.random() - .5) * 8, (Math.random() - .5) * 8, (Math.random() - .5) * 8);
+  s.alive = true;
+}
+let confettiOn = false;
+
+// ---------- state & input ----------
+let started = false;
+let camZ = START_Z, targetZ = START_Z;
+let focused = -1, blend = 0;
+let autoYaw = 0, mouseYaw = 0, mouseYawT = 0, dragYaw = 0, yawSm = 0;
+let finaleShown = false, moved = false;
+const keys = new Set();
+const walkPos = new THREE.Vector3(), walkQ = new THREE.Quaternion();
+const focusPos = new THREE.Vector3(), focusQ = new THREE.Quaternion();
+const tmpM = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0);
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+
+function markMoved() {
+  if (!moved) { moved = true; setTimeout(() => $('hint').style.opacity = 0, 1500); }
+}
+function computeFocus(i) {
+  const ex = exhibits[i];
+  const n = new THREE.Vector3(-ex.side, 0, 0);
+  const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const capH = $('caption').offsetHeight || 150;
+  const avail = clamp(1 - (capH + 40) / innerHeight, 0.55, 0.85);
+  const fh = ex.h + 0.45; // breathing room around the frame
+  let dist = Math.max((fh / 2) / (tv * avail), (ex.w / 2) / (tv * camera.aspect * 0.92));
+  dist = Math.min(dist, HALL_W - 0.3);
+  const center = ex.grp.position.clone(); center.y = PHOTO_Y - 0.25;
+  const shift = dist * tv * (1 - avail);
+  focusPos.copy(center).addScaledVector(n, dist); focusPos.y -= shift;
+  const target = center.clone(); target.y -= shift;
+  tmpM.lookAt(focusPos, target, UP); focusQ.setFromRotationMatrix(tmpM);
+}
+function focus(i) {
+  if (i < 0) return;
+  if (i >= N) { unfocus(); targetZ = STOP_Z; return; }
+  focused = i;
+  exhibits.forEach(e => { if (e.video) e.video.muted = true; });
+  if (exhibits[i].video) { const v = exhibits[i].video; v.currentTime = 0; v.muted = false; v.play().catch(() => {}); if (audio) audio.volume = 0.12; }
+  else if (audio) audio.volume = 0.6;
+  $('cap-label').textContent = `Memory ${i + 1} of ${N}`;
+  $('cap-text').textContent = exhibits[i].caption;
+  $('caption').classList.remove('hidden');
+  $('hud').classList.add('hidden');
+  $('prev').style.visibility = i === 0 ? 'hidden' : 'visible';
+  computeFocus(i);
+  targetZ = clamp(exhibits[i].z + 2.0, STOP_Z, START_Z);
+  markMoved();
+}
+function unfocus() {
+  if (focused < 0) return;
+  focused = -1;
+  exhibits.forEach(e => { if (e.video) e.video.muted = true; });
+  if (audio) audio.volume = 0.6;
+  $('caption').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+}
+function pick(x, y) {
+  ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObjects(clickables, false)[0];
+  return hit && hit.distance < 12 ? hit.object.userData.exhibit : -1;
+}
+
+let ptr = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!started) return;
+  canvas.setPointerCapture(e.pointerId);
+  ptr = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: 0, type: e.pointerType };
+  canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!started) return;
+  if (e.pointerType === 'mouse') {
+    mouseYawT = -(e.clientX / innerWidth - 0.5) * 0.55;
+    if (!ptr) canvas.style.cursor = pick(e.clientX, e.clientY) >= 0 ? 'pointer' : 'grab';
+  }
+  if (!ptr) return;
+  const dx = e.clientX - ptr.lx, dy = e.clientY - ptr.ly;
+  ptr.lx = e.clientX; ptr.ly = e.clientY; ptr.moved += Math.abs(dx) + Math.abs(dy);
+  if (focused < 0) {
+    targetZ = clamp(targetZ + dy * 0.014, STOP_Z, START_Z);
+    if (ptr.type !== 'mouse') dragYaw = clamp(dragYaw - dx * 0.004, -0.9, 0.9);
+    if (ptr.moved > 10) markMoved();
+  }
+});
+const endPtr = (e) => {
+  if (!ptr) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  const quick = performance.now() - ptr.t < 500;
+  if (ptr.moved < 10 && quick) {
+    const hit = pick(e.clientX, e.clientY);
+    if (hit >= 0 && hit !== focused) focus(hit); else unfocus();
+  } else if (focused >= 0) {
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) (dx < 0 ? focus(focused + 1) : focus(focused - 1));
+    else if (Math.abs(dy) > 40) unfocus();
+  }
+  ptr = null; canvas.style.cursor = 'grab';
+};
+canvas.addEventListener('pointerup', endPtr);
+canvas.addEventListener('pointercancel', () => { ptr = null; });
+
+addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (!started) return;
+  if (focused >= 0) { if (Math.abs(e.deltaY) > 25) unfocus(); return; }
+  const d = e.deltaY * (e.deltaMode === 1 ? 30 : 1);
+  targetZ = clamp(targetZ - d * 0.007, STOP_Z, START_Z);
+  markMoved();
+}, { passive: false });
+
+addEventListener('keydown', (e) => {
+  if (!started) return;
+  keys.add(e.key);
+  if (focused >= 0) {
+    if (e.key === 'ArrowRight') focus(focused + 1);
+    else if (e.key === 'ArrowLeft') focus(focused - 1);
+    else if (e.key === 'Escape' || e.key === 'ArrowUp' || e.key === 'ArrowDown') unfocus();
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    const next = exhibits.find(ex => camZ - ex.z > 0.5);
+    if (next) focus(next.i);
+  }
+});
+addEventListener('keyup', (e) => keys.delete(e.key));
+
+$('prev').onclick = () => focus(focused - 1);
+$('next').onclick = () => focus(focused + 1);
+
+// music
+let audio = null;
+if (CONFIG.music) {
+  audio = new Audio(CONFIG.music); audio.loop = true; audio.volume = 0.6;
+  $('mute').onclick = () => { audio.muted = !audio.muted; $('mute').style.opacity = audio.muted ? .45 : 1; };
+}
+$('enter').onclick = () => {
+  started = true;
+  exhibits.forEach(e => e.video && e.video.play().catch(() => {}));
+  $('intro').classList.add('hidden');
+  setTimeout(() => $('hud').classList.remove('hidden'), 700);
+  if (audio) { audio.play().catch(() => {}); $('mute').classList.remove('hidden'); }
+};
+$('again').onclick = () => { $('finale').classList.add('hidden'); targetZ = START_Z; confettiOn = false; };
+$('stay').onclick = () => { $('finale').classList.add('hidden'); };
+
+function onResize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 72 : 60;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (focused >= 0) computeFocus(focused);
+}
+addEventListener('resize', onResize); onResize();
+
+// ---------- loop ----------
+const clock = new THREE.Clock();
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+let t = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05); t += dt;
+
+  if (started && focused < 0) {
+    const fwd = keys.has('ArrowUp') || keys.has('w') || keys.has('W');
+    const back = keys.has('ArrowDown') || keys.has('s') || keys.has('S');
+    if (fwd || back) { targetZ = clamp(targetZ + (back ? 1 : -1) * dt * 2.6, STOP_Z, START_Z); markMoved(); }
+  }
+  camZ += (targetZ - camZ) * damp(3.2, dt);
+
+  // gently turn toward the photo you're approaching
+  let ay = 0;
+  for (const ex of exhibits) {
+    const d = camZ - ex.z;
+    if (d > -0.5 && d < 7) ay += -ex.side * 0.42 * Math.exp(-((d - 2.4) ** 2) / 1.6);
+  }
+  autoYaw += (ay - autoYaw) * damp(2, dt);
+  mouseYaw += (mouseYawT - mouseYaw) * damp(3, dt);
+  if (!ptr) dragYaw *= Math.exp(-dt * 0.6);
+  yawSm += (autoYaw + mouseYaw + dragYaw - yawSm) * damp(4, dt);
+
+  walkPos.set(Math.sin(t * 0.6) * 0.03, EYE + Math.sin(camZ * 2.0) * 0.012, camZ);
+  euler.set(-0.035 + Math.sin(t * 0.5) * 0.006, yawSm, 0);
+  walkQ.setFromEuler(euler);
+
+  blend += ((focused >= 0 ? 1 : 0) - blend) * damp(3.0, dt);
+  const e = blend * blend * (3 - 2 * blend);
+  camera.position.lerpVectors(walkPos, focusPos, e);
+  camera.quaternion.slerpQuaternions(walkQ, focusQ, e);
+
+  // HUD
+  const prog = (START_Z - camZ) / (START_Z - STOP_Z);
+  $('bar').firstElementChild.style.width = (clamp(prog, 0, 1) * 100).toFixed(1) + '%';
+  const seen = exhibits.filter(ex => camZ - ex.z < 2.6).length;
+  $('count').textContent = `${seen} / ${N}`;
+
+  // finale
+  if (started && focused < 0 && !finaleShown && camZ < STOP_Z + 0.35) {
+    finaleShown = true; confettiOn = true;
+    confState.forEach(s => spawnConf(s, true));
+    setTimeout(() => { if (camZ < STOP_Z + 1.5) $('finale').classList.remove('hidden'); }, 1400);
+  }
+  if (finaleShown && camZ > STOP_Z + 3) { finaleShown = false; $('finale').classList.add('hidden'); }
+
+  // dust
+  for (let k = 0; k < DUST; k++) {
+    const ph = dustPhase[k];
+    dustPos[k * 3] = dustBase[k * 3] + Math.cos(t * 0.21 + ph) * 0.12;
+    dustPos[k * 3 + 1] = dustBase[k * 3 + 1] + Math.sin(t * 0.33 + ph) * 0.18;
+    dustPos[k * 3 + 2] = dustBase[k * 3 + 2] + Math.sin(t * 0.17 + ph * 2) * 0.12;
+  }
+  dustGeo.attributes.position.needsUpdate = true;
+
+  // balloons
+  for (const b of balloons) {
+    b.position.y = b.userData.baseY + Math.sin(t * 0.9 + b.userData.phase) * 0.07;
+    b.rotation.z = Math.sin(t * 0.7 + b.userData.phase) * 0.06;
+  }
+
+  // confetti
+  for (let k = 0; k < CONF; k++) {
+    const s = confState[k];
+    if (!s.alive) continue;
+    s.p.y -= s.v * dt;
+    s.p.x += Math.sin(t * 2 + s.sway) * 0.004;
+    s.r.x += s.rv.x * dt; s.r.y += s.rv.y * dt; s.r.z += s.rv.z * dt;
+    if (s.p.y < 0.02) { if (confettiOn) spawnConf(s, false); else { s.alive = false; s.p.y = -10; } }
+    dummy.position.copy(s.p); dummy.rotation.copy(s.r);
+    dummy.scale.setScalar(s.alive && s.p.y < HALL_H ? 1 : 0);
+    dummy.updateMatrix(); confetti.setMatrixAt(k, dummy.matrix);
+  }
+  confetti.instanceMatrix.needsUpdate = true;
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
