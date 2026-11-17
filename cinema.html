@@ -574,9 +574,10 @@ const fireworks = Array.from({length:6}, () => {
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; scene.add(pts);
   return { pos, vel, geo, mat, life:99, scale:1 };
 });
-let fwTimer = 1.2;
+let fwTimer = 1.2, fwWhistled = false;
 function launchFirework(center, scale){
   const f = fireworks.find(f => f.life > 2.6); if (!f) return;
+  { const v = center.clone().applyMatrix4(camera.matrixWorldInverse); SFX.firework(camera.position.distanceTo(center), clamp(v.x/Math.max(4, -v.z), -1, 1)*0.8, scale < 1); }
   f.life = 0; f.scale = scale; f.mat.color.setHex(fwCols[Math.floor(Math.random()*fwCols.length)]); f.mat.size = 1.4*scale;
   const sp = rnd(6, 9)*scale;
   for (let i=0;i<FW_N;i++){ const u = rnd(-1,1), a = rnd(0, Math.PI*2), r = Math.sqrt(1 - u*u), k = sp*rnd(.85, 1);
@@ -584,7 +585,9 @@ function launchFirework(center, scale){
     f.vel[i*3] = r*Math.cos(a)*k; f.vel[i*3+1] = u*k; f.vel[i*3+2] = r*Math.sin(a)*k; }
 }
 function updateFireworks(dt, where){
-  if (where){ fwTimer -= dt; if (fwTimer <= 0){ fwTimer = rnd(0.9, 2.2);
+  if (where){ fwTimer -= dt;
+    if (fwTimer < 0.75 && !fwWhistled){ fwWhistled = true; SFX.whistle(rnd(-0.5, 0.5), where === 'hall'); }
+    if (fwTimer <= 0){ fwTimer = rnd(0.9, 2.2); fwWhistled = false;
     if (where === 'sky') launchFirework(V3(rnd(-26, 26), rnd(26, 42), FACADE_Z - rnd(14, 30)), 1);
     else launchFirework(V3(rnd(-8, 8), rnd(8.2, 10.8), seatZ() - rnd(6, 12)), 0.38); } }
   for (const f of fireworks){ if (f.life > 2.6) { f.mat.opacity = 0; continue; }
@@ -699,6 +702,7 @@ if (CONFIG.music){ music = new Audio(CONFIG.music); music.loop = true; music.vol
    the music and each video, so the film can later play them with sound. */
 let mediaUnlocked = false;
 function unlockMedia(){
+  SFX.init();
   if (mediaUnlocked) return; mediaUnlocked = true;
   if (music && music.paused && phase !== 'film'){ const pr = music.play(); music.pause(); if (pr && pr.catch) pr.catch(()=>{}); }   // unlock only: music waits for the film
   CONFIG.photos.forEach((p, i) => { if (!p.video) return;
@@ -737,7 +741,7 @@ function showItem(k){
   $('count').textContent = showCap ? 'SCENE ' + (it.i + 1) + ' / ' + N : it.kind === 'credits' ? 'CREDITS' : it.kind === 'title' ? 'OPENING' : '';
 }
 function setPaused(p){
-  paused = p; $('play').textContent = p ? '▶' : '⏸'; $('pausedTag').classList.toggle('hidden', !p);
+  paused = p; SFX.projector(!p && phase === 'film'); $('play').textContent = p ? '▶' : '⏸'; $('pausedTag').classList.toggle('hidden', !p);
   const it = reel[rIdx];
   if (it && it.kind === 'video'){ const o = videoFor(it.i); p ? o.v.pause() : o.v.play().catch(()=>{}); }
   if (music){ if (p) music.pause(); else if (!(it && it.kind === 'video')) music.play().catch(()=>{}); }
@@ -761,6 +765,127 @@ function updateFilm(dt){
     pl.scale.set(pl.userData.bw*s, pl.userData.bh*s, 1); }
   $('bar').firstElementChild.style.width = (clamp((rIdx + clamp(rT/it.dur,0,1))/reel.length, 0, 1)*100).toFixed(2) + '%';
   if (rT >= it.dur){ if (rIdx < reel.length - 1) showItem(rIdx + 1); else endFilm(); }
+}
+
+
+/* =====================  SOUND EFFECTS (all synthesized live, no audio files)  ===================== */
+const SFX = (() => {
+  let ctx = null, out = null, wet = null, noiseBuf = null, ambOut = null, ambIn = null, proj = null;
+  const on = () => !!ctx && ctx.state === 'running';
+  function init(){
+    if (ctx){ if (ctx.state !== 'running') ctx.resume().catch(()=>{}); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ctx = new AC(); } catch(e){ return; }
+    out = ctx.createGain(); out.gain.value = 0.85; out.connect(ctx.destination);
+    const sr = ctx.sampleRate;
+    noiseBuf = ctx.createBuffer(1, sr*2, sr); const d = noiseBuf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = Math.random()*2 - 1;
+    const ir = ctx.createBuffer(2, Math.floor(sr*2.4), sr);
+    for (let c=0;c<2;c++){ const x = ir.getChannelData(c); for (let i=0;i<x.length;i++) x[i] = (Math.random()*2 - 1) * Math.pow(1 - i/x.length, 3.4); }
+    const conv = ctx.createConvolver(); conv.buffer = ir;
+    wet = ctx.createGain(); wet.gain.value = 0.35; wet.connect(conv); conv.connect(out);
+    ambOut = bed(420); ambIn = bed(170);
+    ctx.resume().catch(()=>{});
+  }
+  function noise(loop){ const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = !!loop; return s; }
+  function bed(freq){ const s = noise(true), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    f.type = 'lowpass'; f.frequency.value = freq; g.gain.value = 0; s.connect(f); f.connect(g); g.connect(out); s.start(0, Math.random()); return g; }
+  function bus(vol, pan = 0, rev = 0.3){
+    const g = ctx.createGain(); g.gain.value = vol; let tail = g;
+    if (ctx.createStereoPanner){ const p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); tail = p; }
+    tail.connect(out);
+    if (rev > 0){ const s = ctx.createGain(); s.gain.value = rev; tail.connect(s); s.connect(wet); }
+    return g;
+  }
+  function burst(dest, t, dur, type, freq, q, peak, attack = 0.002){
+    const s = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    f.type = type; f.frequency.value = freq; f.Q.value = q;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random()*1.5); s.stop(t + dur + 0.05); return f;
+  }
+  function tone(dest, t, freq, dur, peak, type = 'sine', attack = 0.004, f2 = 0){
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type;
+    o.frequency.setValueAtTime(freq, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur*0.9);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05); return o;
+  }
+  function bell(dest, t, f, dur, peak){ tone(dest, t, f, dur, peak); tone(dest, t, f*2.01, dur*0.55, peak*0.3); tone(dest, t, f*3.98, dur*0.3, peak*0.1); }
+  const midi = m => 440*Math.pow(2, (m - 69)/12);
+  const SPARK = [74, 76, 78, 81, 83, 86, 88, 90, 93, 95];
+
+  return {
+    init,
+    /* fireworks: a whistle going up, then a boom (delayed by distance, like real life) and crackle */
+    whistle(pan, small){ if (!on()) return; const t = ctx.currentTime, b = bus(small ? 0.025 : 0.05, pan, 0.6);
+      tone(b, t, small ? 900 : 520, 0.75, 0.7, 'sine', 0.06, small ? 2600 : 2000); burst(b, t, 0.7, 'bandpass', 3200, 2, 0.25, 0.08); },
+    firework(dist, pan, small){ if (!on()) return;
+      const t = ctx.currentTime + (small ? 0.02 : Math.min(0.9, dist/343)), vol = small ? 0.16 : clamp(30/dist, 0.14, 0.55);
+      const b = bus(vol, pan, small ? 0.4 : 0.7);
+      tone(b, t, small ? 150 : 80, small ? 0.5 : 1.4, 0.9, 'sine', 0.005, small ? 60 : 30);
+      const f = burst(b, t, small ? 0.7 : 1.8, 'lowpass', small ? 2200 : 1000, 0.7, 0.9, 0.004);
+      f.frequency.setValueAtTime(small ? 2200 : 1000, t); f.frequency.exponentialRampToValueAtTime(small ? 400 : 140, t + 1.2);
+      const n = small ? 14 : 36;
+      for (let i=0;i<n;i++) burst(b, t + 0.22 + Math.random()*Math.random()*1.5, 0.03, 'highpass', 2500 + Math.random()*3500, 0.7, 0.1 + 0.3*Math.random(), 0.001);
+    },
+    /* box office: a bell, the printer whirring and clicking, then the ticket tearing off */
+    ticket(){ if (!on()) return; const t = ctx.currentTime, b = bus(0.4, -0.15, 0.2);
+      bell(b, t, 1568, 1.6, 0.18);
+      const m = tone(b, t + 0.15, 95, 1.15, 0.08, 'sawtooth', 0.05);
+      for (let i=0;i<13;i++) burst(b, t + 0.2 + i*0.075, 0.025, 'bandpass', 2200 + (i%3)*300, 3, 0.35, 0.001);
+      for (let i=0;i<16;i++) burst(b, t + 1.3 + i*0.016 + Math.random()*0.01, 0.04, 'bandpass', 2600 + Math.random()*1800, 1, 0.25 + Math.random()*0.25, 0.002);
+    },
+    /* sliding glass doors: a welcome chime and an air whoosh */
+    door(){ if (!on()) return; const t = ctx.currentTime, b = bus(0.3, 0, 0.5);
+      bell(b, t, midi(88), 1.4, 0.12); bell(b, t + 0.38, midi(84), 1.8, 0.12);
+      const f = burst(b, t + 0.05, 1.5, 'bandpass', 900, 0.7, 0.35, 0.3);
+      f.frequency.setValueAtTime(900, t + 0.05); f.frequency.exponentialRampToValueAtTime(280, t + 1.4); },
+    /* footsteps that change with the floor */
+    step(surface){ if (!on()) return; const t = ctx.currentTime, pan = (Math.random() - 0.5)*0.3;
+      if (surface === 'tile'){ const b = bus(0.13, pan, 0.45); burst(b, t, 0.06, 'bandpass', 1900 + Math.random()*500, 1.4, 0.6); tone(b, t, 190, 0.06, 0.25, 'sine', 0.002, 90); }
+      else if (surface === 'carpet'){ const b = bus(0.13, pan, 0.1); burst(b, t, 0.13, 'lowpass', 320 + Math.random()*80, 0.8, 0.7, 0.01); }
+      else { const b = bus(0.11, pan, 0.15); burst(b, t, 0.1, 'lowpass', 750, 0.8, 0.6, 0.004); burst(b, t + 0.01, 0.04, 'bandpass', 3200, 1, 0.2, 0.002); } },
+    /* the velvet seat: a creak and a soft thump */
+    sit(){ if (!on()) return; const t = ctx.currentTime, b = bus(0.22, 0.2, 0.2);
+      const o = tone(b, t, 170, 0.4, 0.12, 'sawtooth', 0.03, 120); burst(b, t + 0.12, 0.25, 'lowpass', 220, 0.8, 0.9, 0.01); },
+    /* curtains parting with a shimmer of chimes */
+    curtain(){ if (!on()) return; const t = ctx.currentTime, b = bus(0.22, 0, 0.5), c = bus(0.07, 0, 0.9);
+      burst(b, t, 3.4, 'bandpass', 650, 0.6, 0.6, 1.3);
+      SPARK.forEach((m, k) => bell(c, t + 0.3 + k*0.12, midi(m), 2.2, 0.5)); },
+    /* the projector rattling away at the back */
+    projector(run){ if (!ctx) return;
+      if (run && !proj){ const s = noise(true), f = ctx.createBiquadFilter(), am = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain(), g = ctx.createGain();
+        f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 2; am.gain.value = 0.5; lfo.type = 'square'; lfo.frequency.value = 21; depth.gain.value = 0.5;
+        lfo.connect(depth); depth.connect(am.gain); g.gain.value = 0;
+        s.connect(f); f.connect(am); am.connect(g); g.connect(out); s.start(); lfo.start(); proj = { g, s, lfo }; }
+      if (proj) proj.g.gain.setTargetAtTime(run ? 0.022 : 0, ctx.currentTime, 0.4); },
+    /* the audience going wild at the end */
+    applause(){ if (!on()) return; const t = ctx.currentTime, bs = [-0.7, -0.25, 0.25, 0.7].map(p => bus(0.2, p, 0.5));
+      for (let i=0;i<320;i++){ const u = Math.random(), tc = t + 0.15 + 5.5*u*u; const fade = 1 - u*u*0.85;
+        burst(bs[i % 4], tc, 0.025 + Math.random()*0.035, 'bandpass', 900 + Math.random()*1700, 1.2, (0.25 + 0.5*Math.random())*fade, 0.001); } },
+    popper(){ if (!on()) return; const t0 = ctx.currentTime;
+      [0, 0.18, 0.31].forEach((d, k) => { const t = t0 + d, b = bus(0.22, [-0.5, 0.5, 0][k], 0.4);
+        burst(b, t, 0.12, 'highpass', 900, 0.7, 1, 0.001); tone(b, t, 900, 0.09, 0.3, 'triangle', 0.001, 220); }); },
+    /* little magical twinkles drifting in the air */
+    twinkle(pan){ if (!on()) return; const b = bus(0.03, pan, 0.9); bell(b, ctx.currentTime, midi(SPARK[Math.floor(Math.random()*SPARK.length)] + 12), 1.6, 0.6); },
+    ambience(outside, inside){ if (!on()) return; const t = ctx.currentTime;
+      ambOut.gain.setTargetAtTime(outside*0.05, t, 0.8); ambIn.gain.setTargetAtTime(inside*0.04, t, 0.8); },
+  };
+})();
+let prevDoor = 0, curtSfx = false, stepAcc = 0, lastStepPos = null;
+function surfaceAt(x, z){
+  if (z > FACADE_Z) return Math.abs(x) < 1.7 && z < FACADE_Z + 11.5 ? 'carpet' : 'street';
+  if (z > AUD_Z0) return Math.abs(x) < 1.6 ? 'carpet' : 'tile';
+  return 'carpet';
+}
+function soundTick(dt){
+  const p = camera.position;
+  if (!lastStepPos) lastStepPos = p.clone();
+  const d = Math.hypot(p.x - lastStepPos.x, p.z - lastStepPos.z); lastStepPos.copy(p);
+  const walking = phase === 'walk1' || phase === 'walk2' || phase === 'roam';
+  if (walking && d < 1.5){ stepAcc += d; if (stepAcc > 0.8){ stepAcc = 0; SFX.step(surfaceAt(p.x, p.z)); } }
+  const outsideNow = p.z > FACADE_Z - 0.3;
+  SFX.ambience(outsideNow ? 1 : 0, outsideNow ? 0 : (phase === 'film' ? 0.25 : 1));
+  if (outsideNow && phase !== 'film' && Math.random() < dt*0.45) SFX.twinkle(rnd(-0.8, 0.8));
 }
 
 /* =====================  THE WALK  ===================== */
@@ -828,6 +953,7 @@ function chooseSeat(){ seatRow = camera.aspect < 0.9 ? 1 : 5; buildWalk();
   const letter = 'ABCDEFGHIJ'[ROWS.length - 1 - seatRow];
   $('t-row').textContent = letter; $('mini').textContent = 'ADMIT ONE · ROW ' + letter + ' · SEAT 1'; }
 function giveTicket(){
+  SFX.ticket();
   setPhase('ticket');
   $('ticketWrap').classList.remove('hidden');
   const t = $('ticket'); t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
@@ -835,17 +961,17 @@ function giveTicket(){
 function goInside(){ if (GAME && phase === 'roam') return closeTicket(); $('ticketWrap').classList.add('hidden'); $('mini').classList.remove('hidden'); setPhase('walk2'); }
 function sitDown(startAt){
   $('intro').classList.add('hidden'); $('ticketWrap').classList.add('hidden'); $('mini').classList.remove('hidden');
-  hasTicket = true; ticketOpen = false; keys.clear(); exitLock();
+  hasTicket = true; ticketOpen = false; keys.clear(); exitLock(); SFX.sit();
   setPhase('dim'); pendingStart = startAt ?? 0;
 }
 let pendingStart = 0;
 function startFilm(){
-  setPhase('film'); setPaused(false); confettiOn = false;
+  setPhase('film'); setPaused(false); confettiOn = false; SFX.projector(true);
   if (music){ music.volume = 0.5; music.currentTime = 0; music.play().catch(()=>{}); }
   showItem(pendingStart);
 }
 function endFilm(){
-  setPhase('end'); stopVideos(); spawnConfetti();
+  setPhase('end'); stopVideos(); spawnConfetti(); SFX.projector(false); SFX.popper(); SFX.applause();
   setTimeout(()=>{ if (phase === 'end') $('finale').classList.remove('hidden'); }, 1600);
 }
 $('intro-h').textContent = NAME + ': The Movie';
@@ -956,7 +1082,7 @@ function startRoam(){
   setPhase('roam'); lock();
 }
 function getTicket(){
-  ticketOpen = true; keys.clear(); exitLock();
+  ticketOpen = true; keys.clear(); exitLock(); SFX.ticket();
   $('ticketWrap').classList.remove('hidden');
   const t = $('ticket'); t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
 }
@@ -970,7 +1096,7 @@ function takeSeat(){
   setPhase('sitting');
 }
 function standUp(){
-  $('finale').classList.add('hidden'); stopVideos(); if (music) music.pause(); confettiOn = false;
+  $('finale').classList.add('hidden'); stopVideos(); if (music) music.pause(); confettiOn = false; SFX.projector(false);
   planes.forEach(pl => { pl.visible = false; pl.material.opacity = 0; pl.userData.item = null; }); $('subs').classList.add('hidden');
   Object.assign(P, { x:0.2, z:seatZ() + 0.95, yaw:0, pitch:0.05, vx:0, vz:0 }); P.y = 1.7 + floorY(P.z);
   setPhase('roam'); lock();
@@ -1085,7 +1211,7 @@ const camPos = V(0,0,0), camLook = V(0,0,0), tmpPos = V(0,0,0), tmpLook = V(0,0,
 const params = new URLSearchParams(location.search);
 if (params.get('scene')) sitDown(FIRST_PHOTO + clamp((parseInt(params.get('scene'),10) || 1) - 1, 0, N - 1));
 else if (params.get('seat')) sitDown(0);
-if (params.get('debug')) window.__DBG = { get music(){ return music; }, P, keys, startRoam, get act(){ return curAct; }, get hasTicket(){ return hasTicket; }, THREE, scene, camera, get phase(){ return phase; }, showItem, reel, step:(n=1, dt=1/30)=>{ for (let i=0;i<n;i++) step(dt); }, go:(p)=>{ if (p==='walk1') $('enter').click(); else if (p==='walk2') goInside(); } };
+if (params.get('debug')) window.__DBG = { SFX, get music(){ return music; }, P, keys, startRoam, get act(){ return curAct; }, get hasTicket(){ return hasTicket; }, THREE, scene, camera, get phase(){ return phase; }, showItem, reel, step:(n=1, dt=1/30)=>{ for (let i=0;i<n;i++) step(dt); }, go:(p)=>{ if (p==='walk1') $('enter').click(); else if (p==='walk2') goInside(); } };
 
 let time = 0, last = performance.now();
 function step(dt){
@@ -1116,6 +1242,7 @@ function step(dt){
 
   /* doors slide open as you approach */
   const open = (GAME && !hasTicket) ? 0 : clamp((FACADE_Z + 8 - camera.position.z)/4, 0, 1); doorOpen = open;
+  if (open > 0.03 && prevDoor <= 0.03) SFX.door(); prevDoor = open;
   doors.forEach(d => d.position.x = d.userData.s * (OPEN_W/4 + smooth(open)*(OPEN_W/2 + 0.2)));
 
   /* house lights, curtains, projector */
@@ -1124,6 +1251,7 @@ function step(dt){
   houseLights.forEach(l => l.intensity = l.userData.full*house);
   sconceMat.color.setScalar(0.25 + 0.75*house);
   const curtT = (phase === 'dim' && phaseT > 1.0) || phase === 'film' || phase === 'end' ? 1 : 0;
+  if (curtT === 1 && !curtSfx){ curtSfx = true; SFX.curtain(); } else if (curtT === 0) curtSfx = false;
   curtainOpen += (curtT - curtainOpen) * damp(0.9, dt);
   curtains.forEach(c => c.m.position.x = c.s*(CURT_W/2 + smooth(clamp(curtainOpen,0,1))*(CURT_W - 0.6)));
   const proj = phase === 'film' || phase === 'end' ? 1 : 0;
@@ -1148,6 +1276,8 @@ function step(dt){
       dummy.position.copy(c.p); dummy.rotation.copy(c.r); dummy.scale.setScalar(c.p.y > -10 && c.p.y < AUD_H ? 1 : 0);
       dummy.updateMatrix(); confetti.setMatrixAt(i, dummy.matrix); }
     confetti.instanceMatrix.needsUpdate = true; }
+
+  soundTick(dt);
 
   /* magic */
   sparkleMats.forEach(m => m.uniforms.uTime.value = time);
